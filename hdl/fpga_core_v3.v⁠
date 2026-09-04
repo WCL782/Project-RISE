@@ -1,0 +1,149 @@
+// =========================================================================
+// Project-RISE : FPGA HARDWARE LOGIC SPECIFICATION (VERILOG HDL) - V3.0
+// Hardened Architecture Edition: Side-Channel Masking, UWB Radar Redundancy, Local Graceful Degradation
+// Copyright © 2026 Wang Chali (Project-RISE Lead Architect). All rights reserved.
+// =========================================================================
+
+module project_rise_fpga_core_v3 (
+    input wire clk_100mhz,              // Master Clock
+    input wire rst_n,                   // Active Low Reset
+    
+    // ===== Module A: Environmental & Spatial Boundary Sensor Inputs =====
+    input wire [7:0] temp_sensor_1,     // Thermal Source 1 Temp (0-50°C mapped to 0-255)
+    input wire [7:0] temp_sensor_2,     // Thermal Source 2 Temp
+    input wire [9:0] thermal_distance,  // Dual Thermal Source Distance (Unit: cm, 0-1023)
+    input wire [9:0] uwb_distance,      // UWB Micro-Radar Distance Redundancy (Unit: cm, Anti-Thermal-Blanket)
+    
+    // ===== Module B: Physiological Monitoring Inputs =====
+    input wire bio_hrv_anomaly,         // HRV Anomaly
+    input wire bio_hr_anomaly,          // Heart Rate Anomaly
+    input wire optical_fail,            // Optical Lens Failure
+    
+    // ===== Module E: Self-Protection & Hardware Attack Inputs =====
+    input wire [11:0] board_temp,       // Mainboard Temp
+    input wire [11:0] core_voltage,     // Core Voltage
+    input wire puf_valid,               // PUF Fingerprint Match Valid
+    input wire [31:0] entropy_mask,     // Random Mask Input for Side-Channel Defense
+    
+    // ===== Manual & Network Inputs =====
+    input wire manual_decoy_trigger,    // Manual Duress Code Trigger
+    input wire distributed_consensus_ok,// External Consensus Responded
+    input wire network_jammed,          // Jamming/Faraday Detector (Anti-DOS Meltdown)
+    input wire remote_verification_timeout,
+    
+    // ===== Output Control Pins =====
+    output reg pin_decoy_trigger,       // Trigger Decoy System
+    output reg pin_adc_offset_enable,   // Precision Collapse ADC Offset Enable
+    output reg pin_quantum_start,       // Initiate Quantum Transmission
+    output reg pin_physical_power_off,  // Physical Relay Fusing
+    output reg pin_secure_erase_scramble,// Scrambled Multi-pass BRAM Erase
+    output reg pin_led_state            // Status LED
+);
+
+    // ===== FSM State Definitions =====
+    localparam S_BOOT         = 4'b0000;  // Boot Self-Test (PUF + Mask Initialization)
+    localparam S_SECURE       = 4'b0001;  // Secure State
+    localparam S_ALERT        = 4'b0010;  // Alert State
+    localparam S_STRESS       = 4'b0100;  // Stress Confirmed
+    localparam S_DECOY_ONLINE = 4'b1000;  // Decoy Mode (Network Active)
+    localparam S_DECOY_OFFLINE= 4'b1100;  // Graceful Degradation (Jamming Counter-DOS)
+    localparam S_MELTDOWN     = 4'b1001;  // Ultimate Meltdown
+    localparam S_LOCKOUT      = 4'b1010;  // Physical Lockout
+
+    reg [3:0] current_state, next_state;
+    
+    // ===== Anomaly Counters & Sliding Window =====
+    reg [26:0] anomaly_timer;
+    localparam TIMER_THRESHOLD_LOW  = 27'd70_000_000;   // 0.7s
+    localparam TIMER_THRESHOLD_HIGH = 120_000_000;      // 1.2s
+    
+    // ===== UWB + Thermal Dual-Redundancy Proximity Check =====
+    wire proximity_breach;
+    assign proximity_breach = ((thermal_distance >= 30 && thermal_distance <= 70) || 
+                               (uwb_distance >= 30 && uwb_distance <= 70));
+    
+    wire [2:0] active_anomalies = {optical_fail, bio_hr_anomaly, bio_hrv_anomaly};
+    wire multi_anomaly_trigger = (active_anomalies >= 2) && proximity_breach;
+    
+    // ===== Side-Channel Hardened Self-Protection =====
+    wire temp_attack    = (board_temp < 12'd200) || (board_temp > 12'd850);
+    wire voltage_attack = (core_voltage < 12'd4500) || (core_voltage > 12'd5500);
+    wire hardware_attack= temp_attack || voltage_attack;
+
+    // ===== FSM State Transition =====
+    always @(posedge clk_100mhz or negedge rst_n) begin
+        if (!rst_n) current_state <= S_BOOT;
+        else current_state <= next_state;
+    end
+
+    always @(*) begin
+        next_state = current_state;
+        case (current_state)
+            S_BOOT: begin
+                if (puf_valid && (entropy_mask != 32'd0)) next_state = S_SECURE;
+                else next_state = S_BOOT;
+            end
+            
+            S_SECURE: begin
+                if (hardware_attack) next_state = S_MELTDOWN;
+                else if (manual_decoy_trigger) next_state = S_DECOY_ONLINE;
+                else if (multi_anomaly_trigger) next_state = S_STRESS;
+                else if (active_anomalies != 3'b000) next_state = S_ALERT;
+                else next_state = S_SECURE;
+            end
+            
+            S_ALERT: begin
+                if (hardware_attack) next_state = S_MELTDOWN;
+                else if (anomaly_timer >= TIMER_THRESHOLD_LOW && multi_anomaly_trigger) next_state = S_STRESS;
+                else if (active_anomalies == 3'b000) next_state = S_SECURE;
+                else next_state = S_ALERT;
+            end
+            
+            S_STRESS: begin
+                if (distributed_consensus_ok) next_state = S_DECOY_ONLINE;
+                else if (network_jammed) next_state = S_DECOY_OFFLINE;
+                else if (remote_verification_timeout) next_state = S_MELTDOWN;
+                else next_state = S_STRESS;
+            end
+            
+            S_DECOY_ONLINE, S_DECOY_OFFLINE: begin
+                if (hardware_attack) next_state = S_MELTDOWN;
+                else next_state = current_state;
+            end
+            
+            S_MELTDOWN: next_state = S_LOCKOUT;
+            S_LOCKOUT:  next_state = S_LOCKOUT;
+            default:    next_state = S_SECURE;
+        endcase
+    end
+
+    // ===== Output Control & Scrambled Multi-Pass Wipe =====
+    reg [19:0] meltdown_delay_counter;
+    always @(posedge clk_100mhz or negedge rst_n) begin
+        if (!rst_n) begin
+            pin_decoy_trigger        <= 1'b0;
+            pin_adc_offset_enable    <= 1'b0;
+            pin_quantum_start        <= 1'b0;
+            pin_physical_power_off   <= 1'b0;
+            pin_secure_erase_scramble<= 1 me;
+            meltdown_delay_counter   <= 20'd0;
+        end else begin
+            case (current_state)
+                S_DECOY_ONLINE, S_DECOY_OFFLINE: begin
+                    pin_decoy_trigger     <= 1'b1;
+                    pin_adc_offset_enable <= 1'b1;
+                end
+                S_MELTDOWN: begin
+                    pin_quantum_start          <= 1'b1;
+                    pin_secure_erase_scramble  <= 1'b1;
+                    if (meltdown_delay_counter < 20'd10_000) begin
+                        meltdown_delay_counter <= meltdown_delay_counter + 20'd1;
+                    end else begin
+                        pin_physical_power_off <= 1'b1;
+                    end
+                end
+                S_LOCKOUT: pin_physical_power_off <= 1'b1;
+            endcase
+        end
+    end
+endmodule
