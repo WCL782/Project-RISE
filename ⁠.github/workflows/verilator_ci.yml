@@ -1,0 +1,25 @@
+name: Project-RISE Automated Hardware Verification CI
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+jobs:
+  verilator-build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Source
+      uses: actions/checkout@v3
+
+    - name: Install Toolchain Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y verilator build-essential
+
+    - name: Run Hardware Emulation & Testbench
+      run: |
+        make clean
+        make test
