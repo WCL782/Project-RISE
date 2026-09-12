@@ -1,4 +1,4 @@
-name: Project-RISE Automated Hardware Verification CI
+name: Project-RISE Hardware Verification CI
 
 on:
   push:
@@ -7,20 +7,19 @@ on:
     branches: [ "main", "master" ]
 
 jobs:
-  verilator-build-and-test:
+  iverilog-build-and-test:
     runs-on: ubuntu-latest
 
     steps:
     - name: Checkout Source
       uses: actions/checkout@v3
 
-    - name: Install Toolchain Dependencies
+    - name: Install Icarus Verilog
       run: |
         sudo apt-get update
-        sudo apt-get install -y verilator build-essential
+        sudo apt-get install -y iverilog build-essential
 
-    - name: Run Hardware Emulation & Testbench
+    - name: Run Testbench
       run: |
         make clean
         make test
-
