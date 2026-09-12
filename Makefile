@@ -1,31 +1,28 @@
-SIM_DIR = sim
-HDL_DIR = hdl
-TB = $(SIM_DIR)/tb_project_rise.v
-RTL = $(HDL_DIR)/project_rise_core.v
-OUT = sim.vvp
+name: Project-RISE Hardware Verification CI
 
-all: test
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
 
-compile:
-	iverilog -o $(OUT) $(TB) $(RTL)
+jobs:
+  iverilog-build-and-test:
+    runs-on: ubuntu-latest
 
-test: compile
-	vvp $(OUT)
+    steps:
+    - name: Checkout Source
+      uses: actions/checkout@v4
 
-clean:
-	rm -f $(OUT) wave.vcd
-HDL_SRC = hdl/bunker_core.v
-SIM_SRC = sim/tb_bunker_core.v
-OUT = sim.vvp
+    - name: Install Icarus Verilog
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y iverilog build-essential
 
-all: test
-
-compile:
-	iverilog -o $(OUT) $(SIM_SRC) $(HDL_SRC)
-
-test: compile
-	vvp $(OUT)
-
-clean:
-	rm -f $(OUT) wave.vcd
-
+    - name: Run Hardware Simulation
+      run: |
+        FILES=$(find . -maxdepth 3 -name "*.v")
+        echo "Found Verilog files:"
+        echo "$FILES"
+        iverilog -o sim.vvp $FILES
+        vvp sim.vvp
