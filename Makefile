@@ -14,3 +14,18 @@ test: compile
 
 clean:
 	rm -f $(OUT) wave.vcd
+HDL_SRC = hdl/bunker_core.v
+SIM_SRC = sim/tb_bunker_core.v
+OUT = sim.vvp
+
+all: test
+
+compile:
+	iverilog -o $(OUT) $(SIM_SRC) $(HDL_SRC)
+
+test: compile
+	vvp $(OUT)
+
+clean:
+	rm -f $(OUT) wave.vcd
+
