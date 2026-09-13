@@ -21,8 +21,7 @@ jobs:
 
     - name: Run Hardware Simulation
       run: |
-        # 自動搜尋專案內所有 .v 檔案並進行編譯
-        FILES=$(find . -maxdepth 3 -name "*.v")
+        FILES=$(find hdl sim -name "*.v")
         echo "Found Verilog files:"
         echo "$FILES"
         iverilog -o sim.vvp $FILES
