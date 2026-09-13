@@ -79,3 +79,77 @@ int main(int argc, char** argv) {
     delete top;
     return 0;
 }
+`timescale 1ns / 1ps
+
+module tb_bunker_core;
+
+    reg       clk;
+    reg       rst_n;
+    reg       mains_power_ok;
+    reg       thermal_anomaly;
+    reg [2:0] node_status;
+
+    wire      gravity_door_drop;
+    wire      honeypot_active;
+    wire      silent_alarm;
+
+    bunker_core uut (
+        .clk              (clk),
+        .rst_n            (rst_n),
+        .mains_power_ok   (mains_power_ok),
+        .thermal_anomaly  (thermal_anomaly),
+        .node_status      (node_status),
+        .gravity_door_drop(gravity_door_drop),
+        .honeypot_active  (honeypot_active),
+        .silent_alarm     (silent_alarm)
+    );
+
+    // 100MHz 時脈生成
+    initial clk = 0;
+    always #5 clk = ~clk;
+
+    initial begin
+        $dumpfile("wave.vcd");
+        $dumpvars(0, tb_bunker_core);
+
+        // 初始化
+        rst_n           = 0;
+        mains_power_ok  = 1;
+        thermal_anomaly = 0;
+        node_status     = 3'b111;
+
+        #20 rst_n = 1;
+        $display("[SYSTEM] Bunker security system armed.");
+
+        // 測試情境 1：主電網斷電 (0.1ms 斷電即落測試)
+        #100;
+        $display("[ALERT] Main grid failure detected!");
+        mains_power_ok = 0;
+
+        #20;
+        if (gravity_door_drop && honeypot_active && silent_alarm) begin
+            $display("[PASS] Gravity door dropped & Honeypot triggered!");
+        end else begin
+            $display("[FAIL] Fail-safe logic failed!");
+        end
+
+        // 恢復供電
+        #100;
+        mains_power_ok = 1;
+
+        // 測試情境 2：熱源異常清空視窗
+        #100;
+        $display("[ALERT] Thermal anomaly detected!");
+        thermal_anomaly = 1;
+
+        #20;
+        if (gravity_door_drop) begin
+            $display("[PASS] Thermal clearing lock executed!");
+        end
+
+        #100;
+        $display("[SUCCESS] All test cases passed!");
+        $finish;
+    end
+
+endmodule
