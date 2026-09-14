@@ -143,7 +143,7 @@ module tb_project_rise_core;
 
     if (test_fail_count > 0) begin
       $display(">>> TEST SUITE FAILED! Triggering CI Failure. <<<");
-      $fatal(1);
+      $stop;
     end else begin
       $display(">>> ALL TESTS PASSED SUCCESSFULLY! <<<");
       $finish;
