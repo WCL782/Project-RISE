@@ -122,7 +122,7 @@ module tb_project_rise_core;
     // --- TEST 4: Power Loss Simulation ---
     $display("\n--- TEST 4: Mains Power Loss (HEMP Simulation) ---");
     mains_power_ok = 0; #20;
-    check_signal("Power Cut Instant Lockdown", pin_physical_power_off, 1 meb1 ? 1'b1 : 1'b1);
+    check_signal("Power Cut Instant Lockdown", pin_physical_power_off, 1'b1);
 
     // --- TEST 5: 8-Channel RO-TRNG Output Check ---
     $display("\n--- TEST 5: RO-TRNG Entropy Generation Check ---");
