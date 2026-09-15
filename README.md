@@ -1,6 +1,6 @@
 Project-RISE: Hardware-Enforced Cyber-Physical Security Architecture for High-Stress Environments
 Grand Award Candidate Specification & System Architecture Whitepaper
-Embedded Systems / Hardware Security / Cyber-Physical Infrastructure
+Embedded Systems / Hardware Security / Cyber-Physical Infrastructure 
 Lead System Architect: WCL782
 Target Standards: SystemVerilog 2012, IEEE 1364-2001, NIST SP 800-90B, ISO 26262 ASIL-D
 1. Abstract & Research Statement
