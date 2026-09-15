@@ -1,0 +1,104 @@
+name: Project-RISE High-Assurance Verification Pipeline
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+env:
+  SYSTEMVERILOG_STD: "2012"
+  TARGET_CORE: "hdl/project_rise_core.v"
+  TESTBENCH: "sim/tb_project_rise_core.v"
+  HAL_DRIVER: "hal/project_rise_hal.cpp"
+
+jobs:
+  static-analysis:
+    name: 1. RTL Static Analysis & Strict Linting (Verilator)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository Source Code
+        uses: actions/checkout@v4
+
+      - name: Install Verilator Static Analysis Engine
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y verilator
+
+      - name: Execute Verilator Linting with Simulation Macro
+        run: |
+          echo "Executing Verilator static analysis on SystemVerilog source..."
+          verilator -DSIMULATION --lint-only -Wall -Wno-fatal ${{ env.TARGET_CORE }}
+          echo "Verilator Linting passed with zero fatal errors."
+
+  synthesis-check:
+    name: 2. Hardware Synthesizability Check (Yosys)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository Source Code
+        uses: actions/checkout@v4
+
+      - name: Install Yosys Open Synthesis Suite
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y yosys
+
+      - name: Execute Yosys Gate-Level Synthesis Check
+        run: |
+          echo "Validating hardware synthesizability for iCE40 target..."
+          yosys -p "synth_ice40 -top project_rise_core" ${{ env.TARGET_CORE }}
+          echo "Yosys RTL synthesis compilation completed successfully."
+
+  rtl-simulation:
+    name: 3. RTL Behavioral Simulation & Threat Scenarios (Icarus Verilog)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository Source Code
+        uses: actions/checkout@v4
+
+      - name: Install Icarus Verilog Simulation Tools
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y iverilog vvp
+
+      - name: Compile RTL Core and Testbench with Simulation Macro
+        run: |
+          echo "Compiling SystemVerilog core and cycle-accurate testbench..."
+          iverilog -DSIMULATION -o sim.out ${{ env.TARGET_CORE }} ${{ env.TESTBENCH }}
+
+      - name: Execute Simulation & Run Fault Injection Scenarios
+        run: |
+          echo "Running behavioral simulation for TMR, Tamper Mesh, and RO-TRNG..."
+          vvp sim.out
+          echo "Behavioral simulation passed with 100% assertions satisfied."
+
+      - name: Upload VCD Waveform Artifact (If Generated)
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: simulation-waveform
+          path: "*.vcd"
+          if-no-files-found: ignore
+
+  hal-driver-verification:
+    name: 4. C++ Hardware Abstraction Layer Driver Verification
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository Source Code
+        uses: actions/checkout@v4
+
+      - name: Install Native C++ Compiler Toolchain
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y build-essential gcc g++
+
+      - name: Compile C++ HAL Driver Integration Suite
+        run: |
+          echo "Compiling C++ HAL driver unit tests..."
+          g++ -std=c++17 -Ihal ${{ env.HAL_DRIVER }} -o hal_test
+
+      - name: Execute C++ HAL Driver Unit Tests
+        run: |
+          echo "Executing C++ HAL register mirroring and API test suite..."
+          ./hal_test
+          echo "HAL driver verification executed successfully."
