@@ -1,0 +1,74 @@
+name: Project-RISE CI
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+jobs:
+  lint:
+    name: 1. RTL Static Analysis & Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install Verilator
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y verilator
+
+      - name: Run Verilator Lint
+        run: |
+          verilator -DSIMULATION --lint-only -Wall -Wno-fatal hdl/project_rise_core.v
+
+  synthesis:
+    name: 2. Hardware Synthesizability Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install Yosys
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y yosys
+
+      - name: Run Yosys Synthesis Check
+        run: |
+          yosys -p "synth_ice40 -top project_rise_core" hdl/project_rise_core.v
+
+  simulation:
+    name: 3. RTL Simulation & Waveform Dump
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install Icarus Verilog
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y iverilog
+
+      - name: Run Icarus Verilog Simulation
+        run: |
+          iverilog -DSIMULATION -o sim.out hdl/project_rise_core.v sim/tb_project_rise_core.v
+          vvp sim.out
+
+  hal-test:
+    name: 4. C++ HAL Driver Verification
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install Build Tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential
+
+      - name: Compile & Run C++ HAL Tests
+        run: |
+          g++ -std=c++17 -Ihal hal/project_rise_hal.cpp -o hal_test
+          ./hal_test
