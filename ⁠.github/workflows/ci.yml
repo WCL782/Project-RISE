@@ -1,0 +1,80 @@
+name: Project-RISE High-Assurance Verification Pipeline
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+jobs:
+  lint-analysis:
+    name: 1. RTL Static Analysis & Strict Linting
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Install Verilator Static Analyzer
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y verilator
+
+      - name: Execute Verilator Linting
+        run: |
+          verilator -DSIMULATION --lint-only -Wall -Wno-fatal hdl/project_rise_core.v
+
+  synthesis-check:
+    name: 2. Hardware Synthesizability Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Install Yosys Open Synthesis Suite
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y yosys
+
+      - name: Execute Yosys Synthesis Verification
+        run: |
+          yosys -p "synth_ice40 -top project_rise_core" hdl/project_rise_core.v
+
+  rtl-simulation:
+    name: 3. RTL Simulation & Threat Verification
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Install Icarus Verilog Simulation Engine
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y iverilog vvp
+
+      - name: Compile RTL Core and Testbench
+        run: |
+          iverilog -DSIMULATION -o sim.out hdl/project_rise_core.v sim/tb_project_rise_core.v
+
+      - name: Execute Behavioral Waveform Simulation
+        run: |
+          vvp sim.out
+
+  hal-driver-test:
+    name: 4. C++ Hardware Abstraction Layer Verification
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Install C++ Build Toolchain
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y build-essential gcc g++
+
+      - name: Compile C++ HAL Test Suite
+        run: |
+          g++ -std=c++17 -Ihal hal/project_rise_hal.cpp -o hal_test
+
+      - name: Run HAL Driver Register Verification
+        run: |
+          ./hal_test
